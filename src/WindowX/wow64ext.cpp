@@ -33,8 +33,8 @@ public:
 #pragma warning(push)
 #pragma warning(disable : 4409)
 
-//×¢Òâ£ºX64Call»áÇåÁã´«Èë²ÎÊı¸½½üµÄÕ»¿Õ¼ä£¬¹Ê´«ÈëÖ¸Õë²ÎÊıÊ±×¢ÒâÒª´´½¨±¾µØ»º³åÇø
-//¾ßÌå¿ÉÒÔ²Î¿¼ÎÒÊÇÈçºÎÔÚ NtQueryInformationProcess64 ÖĞµ÷ÓÃµÄ
+//æ³¨æ„ï¼šX64Callä¼šæ¸…é›¶ä¼ å…¥å‚æ•°é™„è¿‘çš„æ ˆç©ºé—´ï¼Œæ•…ä¼ å…¥æŒ‡é’ˆå‚æ•°æ—¶æ³¨æ„è¦åˆ›å»ºæœ¬åœ°ç¼“å†²åŒº
+//å…·ä½“å¯ä»¥å‚è€ƒæˆ‘æ˜¯å¦‚ä½•åœ¨ NtQueryInformationProcess64 ä¸­è°ƒç”¨çš„
 DWORD64 __cdecl X64Call(DWORD64 func, int argC, ...)
 {
 	if (!g_isWow64)
@@ -342,7 +342,7 @@ DWORD64 getLdrGetProcedureAddress()
     WATCH(nameTable);
     getMem64(nameTable, modBase + ied.AddressOfNames, sizeof(DWORD)*ied.NumberOfNames);
 
-    //´ıÓÅ»¯: Ê¹ÓÃ¶ş·Ö·¨À´¼ÓËÙËÑË÷
+    //å¾…ä¼˜åŒ–: ä½¿ç”¨äºŒåˆ†æ³•æ¥åŠ é€Ÿæœç´¢
     for (DWORD i = 0; i < ied.NumberOfFunctions; i++)
     {
         if (!cmpMem64((void*)"LdrGetProcedureAddress", modBase + nameTable[i], sizeof("LdrGetProcedureAddress")))
