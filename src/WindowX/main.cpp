@@ -58,24 +58,24 @@ public:
 		
 	}
 
-	// »ñÈ¡µ±Ç°½ø³ÌÇé¿ö
+	// è·å–å½“å‰è¿›ç¨‹æƒ…å†µ
 	RemoteStatu GetRemoteStatu();
 	
 	bool IsWorkerThread(HANDLE phThread);
 
-	//×¢Èë¹¤×÷Ïß³Ì
+	//æ³¨å…¥å·¥ä½œçº¿ç¨‹
 	bool CreateWorkerThread();
 
-	//¼ÓÔØDLL
+	//åŠ è½½DLL
 	bool ExecLoadDll();
 
-	//Ö´ĞĞ°²×°
+	//æ‰§è¡Œå®‰è£…
 	bool ExecInstall(DWORD threadId, HWND t);
 
-	//Ğ¶ÔØDLL
+	//å¸è½½DLL
 	bool ExecUnLoadDll();
 
-	//shellCode ³õÊ¼»¯
+	//shellCode åˆå§‹åŒ–
 	static void ScInit() 
 	{
 		DWORD proc32;
@@ -119,7 +119,7 @@ private:
 	bool isX64;
 
 	
-	HANDLE CreateApcEvent(); //´´½¨Ô¶³ÌÍ¬²½ÊÂ¼ş
+	HANDLE CreateApcEvent(); //åˆ›å»ºè¿œç¨‹åŒæ­¥äº‹ä»¶
 	void CloseApcEvent(HANDLE hRemote);
 	
 	
@@ -246,13 +246,13 @@ HANDLE RemoteCaller::CreateApcEvent()
 
 void RemoteCaller::CloseApcEvent(HANDLE hRemote)
 {
-	//ÏÈ¹Ø±ÕÔ¶³Ì¾ä±ú
+	//å…ˆå…³é—­è¿œç¨‹å¥æŸ„
 	HANDLE hLocal = NULL;
 	DuplicateHandle(hProcess, hRemote, GetCurrentProcess(), &hLocal, 0, FALSE, DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS);
 
 	if (hLocal) { CloseHandle(hLocal); }
 	
-	//¹Ø±Õ±¾µØ¾ä±ú
+	//å…³é—­æœ¬åœ°å¥æŸ„
 	if (hWait) {
 		CloseHandle(hWait);
 		hWait = NULL;
@@ -299,7 +299,7 @@ RemoteStatu RemoteCaller::GetRemoteStatu()
 bool RemoteCaller::CreateWorkerThread()
 {
 	LARGE_INTEGER liDelay = { { 0 } };
-	liDelay.QuadPart = 0x8000000000000000; // ×î´óµÄ¸ºÊı == ÎŞÏŞ; ¸ñÊ½: -10 * 1000 * 30000; //30000ms
+	liDelay.QuadPart = 0x8000000000000000; // æœ€å¤§çš„è´Ÿæ•° == æ— é™; æ ¼å¼: -10 * 1000 * 30000; //30000ms
 
 	unsigned char buffer[200];
 	HANDLE hThread;
@@ -441,13 +441,13 @@ bool RemoteCaller::ExecInstall(DWORD threadId, HWND t)
 
 #pragma region Proc
 
-//¶ÔÓÚConsoleWindowClass GetWindowThreadProcessId»á·µ»Ø´íÎóµÄ½á¹û£¬¹ÊÒªÌØÊâ´¦Àí
-//Ô­Òò£º
+//å¯¹äºConsoleWindowClass GetWindowThreadProcessIdä¼šè¿”å›é”™è¯¯çš„ç»“æœï¼Œæ•…è¦ç‰¹æ®Šå¤„ç†
+//åŸå› ï¼š
 //https://www.howtogeek.com/howto/4996/what-is-conhost.exe-and-why-is-it-running/
 //https://www.oschina.net/translate/inside-the-windows-console
 bool HandleConsoleWindow(IN HANDLE hProcess, OUT DWORD* processId, OUT DWORD* threadId)
 {
-	//ÕÒµ½¶ÔÓ¦µÄconhost.exeµÄ½ø³Ìid
+	//æ‰¾åˆ°å¯¹åº”çš„conhost.exeçš„è¿›ç¨‹id
 	if (isOSX64) {
 		DWORD64 consoleHostPId;
 		bool res = NtQueryInformationProcess64(hProcess, ProcessConsoleHostProcess, &consoleHostPId, 8, NULL);
@@ -463,9 +463,9 @@ bool HandleConsoleWindow(IN HANDLE hProcess, OUT DWORD* processId, OUT DWORD* th
 		*processId = consoleHostPId & ~3;
 	}
 
-	//Õâ¸ö¶ÔÓ¦Ïß³Ìid²»ºÃÕÒ£¬ÑĞ¾¿ÁË°ëÌìÃ»³É¹¦¡£¡£¡£Ë÷ĞÔÔÚdllÖĞ½øĞĞ±äÍ¨£¬¼ûdllmain´úÂëInstallº¯Êı
-	//ÎÊÌâ£ºµ«ÊÇÊ¹ÓÃÁË SetWindowLongPtr, ²»°²È«, Ô­Òò£º https://blogs.msdn.microsoft.com/oldnewthing/20031111-00/?p=41883
-	//´ıÓÅ»¯£º×îºÃ»¹ÊÇÄÜÕÒµ½...
+	//è¿™ä¸ªå¯¹åº”çº¿ç¨‹idä¸å¥½æ‰¾ï¼Œç ”ç©¶äº†åŠå¤©æ²¡æˆåŠŸã€‚ã€‚ã€‚ç´¢æ€§åœ¨dllä¸­è¿›è¡Œå˜é€šï¼Œè§dllmainä»£ç Installå‡½æ•°
+	//é—®é¢˜ï¼šä½†æ˜¯ä½¿ç”¨äº† SetWindowLongPtr, ä¸å®‰å…¨, åŸå› ï¼š https://blogs.msdn.microsoft.com/oldnewthing/20031111-00/?p=41883
+	//å¾…ä¼˜åŒ–ï¼šæœ€å¥½è¿˜æ˜¯èƒ½æ‰¾åˆ°...
 	*threadId = NULL;
 	return true;
 }
@@ -483,13 +483,13 @@ VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 				}
 			}
 
-			//WXR_Ready: ÒÑ¾­°²×°
+			//WXR_Ready: å·²ç»å®‰è£…
 			if (GetProp(hWnd, L"WX_BASIC") != NULL) { return; }
 
 			char c[100];
 			GetClassNameA(hWnd, c, 100);
 
-			//ĞèÒªÅÅ³ıµÄ´°¿ÚÀà¿ÉÔÚÕâÀïÌí¼Ó
+			//éœ€è¦æ’é™¤çš„çª—å£ç±»å¯åœ¨è¿™é‡Œæ·»åŠ 
 			if (strcmp(c, "MsoSplash") == 0 ) { return; }
 
 			DWORD processId;
@@ -499,7 +499,7 @@ VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 
 			bool isCurpX64 = CheckProcessX64(hProcess);
 
-			//´¦Àícmd´°¿Ú
+			//å¤„ç†cmdçª—å£
 			if (strcmp(c, "ConsoleWindowClass") == 0) {
 				if (!HandleConsoleWindow(hProcess, &processId, &threadId)) { return; }
 
@@ -507,7 +507,7 @@ VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 				hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
 				if (hProcess == NULL) { return; }
 
-				//conhost.exe³ÌĞòµÄÎ»ÊıÓëÏà¹ØµÄcmd³ÌĞòÎŞ¹Ø£¬Ö»ºÍOSÓĞ¹Ø
+				//conhost.exeç¨‹åºçš„ä½æ•°ä¸ç›¸å…³çš„cmdç¨‹åºæ— å…³ï¼Œåªå’ŒOSæœ‰å…³
 				isCurpX64 = isOSX64;
 			}
 			
@@ -558,7 +558,7 @@ LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (hMenu) {
 				POINT stPoint;
 				GetCursorPos(&stPoint);
-				InsertMenu(hMenu, 0xFFFFFFFF, MF_STRING, 40002, L"ÍË³ö");
+				InsertMenu(hMenu, 0xFFFFFFFF, MF_STRING, 40002, L"é€€å‡º");
 				SetForegroundWindow(hWnd);
 				TrackPopupMenu(hMenu, TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON, stPoint.x, stPoint.y, 0, hWnd, NULL);
 				DestroyMenu(hMenu);
@@ -673,7 +673,7 @@ BOOL SetDebugPrivilege()
 	return bRet;
 }
 
-//ÎªÁË°²È«£¬²»ÒªÒÔ¹ÜÀíÔ±È¨ÏŞÔËĞĞ!!!
+//ä¸ºäº†å®‰å…¨ï¼Œä¸è¦ä»¥ç®¡ç†å‘˜æƒé™è¿è¡Œ!!!
 int WINAPI WinMain(HINSTANCE hInstance,
 	HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine,
@@ -686,7 +686,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
 #endif // _DEBUG
 
 
-	//SetDebugPrivilege(); //ÎªÁË°²È«£¬»¹ÊÇËãÁË¡£¡£¡£
+	//SetDebugPrivilege(); //ä¸ºäº†å®‰å…¨ï¼Œè¿˜æ˜¯ç®—äº†ã€‚ã€‚ã€‚
 
 	GetModuleFileName(NULL, dllFullPath32, MAX_PATH - 8);
 	(wcsrchr(dllFullPath32, L'\\'))[0] = 0;
