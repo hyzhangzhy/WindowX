@@ -106,6 +106,7 @@ public:
 
 	static void pManagerErase(DWORD processId)
 	{
+		CloseHandle(pManager[processId].workerThread);
 		pManager.erase(processId);
 	}
 
