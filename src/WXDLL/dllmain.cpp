@@ -62,7 +62,7 @@ BOOL OnShake(HWND hwnd)
 			return TRUE;
 		}
 		SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOSENDCHANGING);
-		SetWindowTrans(hwnd, 190);
+		SetWindowTrans(hwnd, 200);
 		SetCursor(LoadCursor(NULL, IDC_ARROW));
 		pre_op = 255;
 	}
@@ -265,8 +265,8 @@ BOOL MainFeature(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		GetLayeredWindowAttributes(hWnd, 0, &pre_op, NULL);
 		if (isMove) {
 			if (topMost) { SetCursor(LoadCursor(hInst, MAKEINTRESOURCE(225))); }
-			if (pre_op > 190) { //移动透明功能
-				SetWindowTrans(hWnd, 190);
+			if (pre_op > 200) { //移动透明功能
+				SetWindowTrans(hWnd, 200);
 			}
 		}
 		enter = TRUE;
@@ -319,6 +319,14 @@ BOOL MainFeature(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			needBlock = TRUE;
 		}
 		break;
+	case WM_TIMER:
+		if (wParam == 151140225) {
+			TryInstallExtra(hWnd);
+			KillTimer(hWnd, wParam);
+			needBlock = TRUE;
+		}
+		break;
+
 	default:
 		break;
 	}
@@ -328,19 +336,12 @@ BOOL MainFeature(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 LRESULT CALLBACK WXWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
-	if (msg == WM_TIMER) {
-		if (wParam == 151140225) {
-			TryInstallExtra(hWnd);
-			KillTimer(hWnd, wParam);
-			return 0;
-		}
-		
-	}
-	else if (msg == WM_NCDESTROY) {
+	if (msg == WM_NCDESTROY) {
 		RemoveWindowSubclass(hWnd, WXWndProc, 2834);
 		RemoveProp(hWnd, L"WX_BASIC");
+		return 0;
 	}
-
+		
 	BOOL needBlock = MainFeature(hWnd, msg, wParam, lParam);
 
 	if (needBlock) { return 0; }
@@ -375,7 +376,7 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 			if (SetWindowSubclass(info->hwnd, WXWndProc, 2834, 0)) {
 				bool aaa = SetProp(info->hwnd, L"WX_BASIC", (void*)1623);
 				SetLayeredWnd(info->hwnd);
-				TryInstallExtra(info->hwnd);
+				SetTimer(info->hwnd, 151140225, 1000, NULL);
 			}
 			UnhookWindowsHookEx((HHOOK)info->wParam);
 		}
