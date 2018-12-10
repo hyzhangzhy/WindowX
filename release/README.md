@@ -1,1 +1,1 @@
-见 github release
+# 见 [github release](https://github.com/hyzhangzhy/WindowX/releases)
