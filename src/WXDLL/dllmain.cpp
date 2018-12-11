@@ -8,7 +8,6 @@
 #pragma comment(lib, "Comctl32.lib")
 static int titleBarHeight;
 static HINSTANCE hInst;
-static HWND WindowX;
 static UINT WX_HOOK;
 
 /*void DebugWrite(const char* t)
@@ -21,6 +20,10 @@ static UINT WX_HOOK;
 
 void SendToWX(DWORD info)
 {
+	HWND WindowX = FindWindow(L"WindowX_1", NULL);
+
+	if (WindowX == NULL) { return; }
+
 	COPYDATASTRUCT CopyData;
 	CopyData.dwData = 0x1502;
 	CopyData.cbData = 4;
@@ -337,9 +340,10 @@ BOOL MainFeature(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 LRESULT CALLBACK WXWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
 	if (msg == WM_NCDESTROY) {
+		//OutputDebugStringA("remove");
 		RemoveWindowSubclass(hWnd, WXWndProc, 2834);
 		RemoveProp(hWnd, L"WX_BASIC");
-		return 0;
+		return DefSubclassProc(hWnd, msg, wParam, lParam);
 	}
 		
 	BOOL needBlock = MainFeature(hWnd, msg, wParam, lParam);
@@ -352,6 +356,14 @@ LRESULT CALLBACK WXWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, UI
 LONG_PTR OldWndProc = NULL;
 LRESULT CALLBACK WXConsoleWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if (message == WM_CLOSE) {
+		SetWindowLongPtr(hWnd, GWLP_WNDPROC, OldWndProc);
+		RemoveProp(hWnd, L"WX_BASIC");
+		//OutputDebugString(L"send detach");
+		SendToWX(GetCurrentProcessId());
+		return CallWindowProc((WNDPROC)OldWndProc, hWnd, message, wParam, lParam);
+	}
+
 	BOOL needBlock = MainFeature(hWnd, message, wParam, lParam);
 
 	if (needBlock) { return 0; }
@@ -468,9 +480,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH: {
-		WindowX = FindWindow(L"WindowX_1", NULL);
-		if (!WindowX) { return false; }
-
 		titleBarHeight = (GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CYCAPTION) +
 			GetSystemMetrics(SM_CXPADDEDBORDER));
 		WX_HOOK = RegisterWindowMessage(L"WX_HOOK__1");
@@ -480,27 +489,14 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	}
 
 	case DLL_THREAD_ATTACH: {
-
 		break;
 	}
 
 	case DLL_THREAD_DETACH: {
-		/*lpvData = TlsGetValue(dwTlsIndex);
-		if (lpvData != NULL) {
-			UnInstall(lpvData);
-			DebugWrite("Free");
-		}*/
-			
-
 		break;
 	}
 
 	case DLL_PROCESS_DETACH: {
-		/*lpvData = TlsGetValue(dwTlsIndex);
-		if (lpvData != NULL)
-			UnInstall(lpvData);
-
-		TlsFree(dwTlsIndex);*/
 		SendToWX(GetCurrentProcessId());
 		break;
 	}
@@ -508,14 +504,4 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	return TRUE;
 }
 
-
-/*
-
-DWORD t = GetCurrentThreadId();
-COPYDATASTRUCT CopyData;
-CopyData.dwData = 0x1502;
-CopyData.cbData = 8;
-CopyData.lpData = &t;
-SendMessage(msgWnd, WM_COPYDATA, (WPARAM)(HWND)(info->hwnd), (LPARAM)&CopyData);
-*/
 
