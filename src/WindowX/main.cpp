@@ -106,6 +106,8 @@ public:
 
 	static void pManagerErase(DWORD processId)
 	{
+		if (pManager.find(processId) == pManager.end()) { return; }
+
 		CloseHandle(pManager[processId].workerThread);
 		pManager.erase(processId);
 	}
@@ -382,7 +384,6 @@ bool RemoteCaller::ExecLoadDll()
 			VirtualFreeEx(hProcess, stub32, sizeof(scLoadDll32), MEM_RELEASE);
 			VirtualFreeEx(hProcess, (void*)remoteData32, dataSize, MEM_RELEASE);
 		}
-		return true;
 	}
 	else {
 		size_t pathLen = wcslen(dllFullPath64);
@@ -418,12 +419,11 @@ bool RemoteCaller::ExecLoadDll()
 			VirtualFreeEx64(hProcess, stub64, sizeof(scLoadDll64), MEM_RELEASE);
 			VirtualFreeEx64(hProcess, remoteData64, dataSize, MEM_RELEASE);
 		}
-		return true;
 	}
 
 	CloseApcEvent(hWaitRemote);
 
-	return false;
+	return true;
 }
 
 bool RemoteCaller::ExecInstall(DWORD threadId, HWND t)
@@ -547,7 +547,7 @@ LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		stData.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 		stData.uCallbackMessage = WM_TRAY;
 		stData.hIcon = g_hIcon = LoadIcon(NULL, MAKEINTRESOURCE(IDI_APPLICATION));
-		wcscpy(stData.szTip, L"WindowX");
+		wcscpy_s(stData.szTip, L"WindowX");
 		if (!Shell_NotifyIcon(NIM_ADD, &stData))
 			return -1;
 		return 0;
