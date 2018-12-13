@@ -9,10 +9,10 @@
 #include "wow64ext.h"
 #include "Tlhelp32.h"
 
-#pragma region GLOBAL
+#pragma region Global
 
 const UINT WM_TRAY = WM_USER + 1;
-HICON g_hIcon = NULL;
+HWND g_msgWnd;
 
 wchar_t dllFullPath32[MAX_PATH];
 wchar_t dllFullPath64[MAX_PATH];
@@ -30,11 +30,12 @@ bool CheckProcessX64(HANDLE hProcess)
 
 #pragma endregion
 
-#pragma region Def
+#pragma region Remote
 
 struct RemoteInfo
 {
 	HANDLE workerThread;
+	HANDLE hWait;        //Windows ThreadPool wait handle, to monitor if our workerThread has been terminated.
 	union
 	{
 		DWORD install32;
@@ -53,29 +54,33 @@ enum RemoteStatu
 class RemoteCaller
 {
 public:
+	RemoteCaller() {}
+
+
 	RemoteCaller(bool p, DWORD processId, HANDLE pProcess) : isX64(p), pId(processId), hProcess(pProcess)
 	{
 		
 	}
 
-	// 获取当前进程情况
+	//Get current window's process status.
 	RemoteStatu GetRemoteStatu();
 	
+	//Check if phThread is our workerThread.
 	bool IsWorkerThread(HANDLE phThread);
 
-	//注入工作线程
+	//Inject WorkerThread. 
 	bool CreateWorkerThread();
 
-	//加载DLL
+	//Inject the dll.
 	bool ExecLoadDll();
 
-	//执行安装
+	//Execute install procedure.
 	bool ExecInstall(DWORD threadId, HWND t);
 
-	//卸载DLL
+	//todo: Safely eject the dll.
 	bool ExecUnLoadDll();
 
-	//shellCode 初始化
+	//ShellCode initialization.
 	static void ScInit() 
 	{
 		DWORD proc32;
@@ -104,13 +109,29 @@ public:
 		memcpy(scLoadDll64 + 109, &proc64, 8);
 	}
 
-	static void pManagerErase(DWORD processId)
+	void pManagerErase(DWORD processId)
 	{
 		if (pManager.find(processId) == pManager.end()) { return; }
 
 		CloseHandle(pManager[processId].workerThread);
+		UnregisterWaitEx(pManager[processId].hWait, INVALID_HANDLE_VALUE);
 		pManager.erase(processId);
 	}
+
+	/*void CleanWorkers()
+	{
+		std::unordered_map<DWORD, RemoteInfo>::iterator it = pManager.begin();
+		while (it != pManager.end()) {
+			DWORD exitCode;
+			if (!GetExitCodeThread(it->second.workerThread, &exitCode) ||
+				exitCode != STILL_ACTIVE) {
+				CloseHandle(it->second.workerThread);
+				it = pManager.erase(it);
+			}
+			else
+				it++;
+		}
+	}*/
 
 private:
 	
@@ -122,8 +143,14 @@ private:
 	bool isX64;
 
 	
-	HANDLE CreateApcEvent(); //创建远程同步事件
+	HANDLE CreateApcEvent(); //Create Remote Apc Event.
 	void CloseApcEvent(HANDLE hRemote);
+
+	//Windows ThreadPool callback procedure.
+	static VOID CALLBACK CleanerProc(PVOID lpParam, BOOLEAN TimerOrWaitFired)
+	{
+		SetTimer(g_msgWnd, (DWORD)lpParam, 500, NULL);
+	}
 	
 	
 };
@@ -206,7 +233,9 @@ unsigned char RemoteCaller::scWorker64[] = {
 	0xc3
 };
 
-//\x48\x83\xec\x28\x48\x83\xc4\x28
+/*
+
+*/
 unsigned char RemoteCaller::scLoadDll64[] = {
 	0x48, 0x83, 0xec, 0x28,
 	0x48, 0xbb, 0x00, 0x00, 0x3a, 0xd4, 0x74, 0x02, 0x00, 0x00,  //6
@@ -249,13 +278,13 @@ HANDLE RemoteCaller::CreateApcEvent()
 
 void RemoteCaller::CloseApcEvent(HANDLE hRemote)
 {
-	//先关闭远程句柄
+	//Close the remote handle first.
 	HANDLE hLocal = NULL;
 	DuplicateHandle(hProcess, hRemote, GetCurrentProcess(), &hLocal, 0, FALSE, DUPLICATE_CLOSE_SOURCE | DUPLICATE_SAME_ACCESS);
 
 	if (hLocal) { CloseHandle(hLocal); }
 	
-	//关闭本地句柄
+	//Then, close the local handle.
 	if (hWait) {
 		CloseHandle(hWait);
 		hWait = NULL;
@@ -264,17 +293,16 @@ void RemoteCaller::CloseApcEvent(HANDLE hRemote)
 
 bool RemoteCaller::IsWorkerThread(HANDLE phThread)
 {
+	bool res = false;
 	if (isX64) {
 		DWORD64 startAdd = 0;
 		NtQueryInformationThread64(phThread, ThreadQuerySetWin32StartAddress, &startAdd, 8, NULL);
 		DWORD64 test = 0;
 		ReadProcessMemory64(hProcess, startAdd - 8, &test, 8, NULL);
 		if (test == 0x8000000000000000) {
-			//printf("Worker Founded! %llx\n", test);
-			//printf("ThreadID: %d\n\n", GetThreadId(phThread));
 			//OutputDebugString(L"Worker Found!\n\n");
 			pManager[pId].workerThread = phThread;
-			return true;
+			res = true;
 		}
 	}
 	else {
@@ -286,11 +314,14 @@ bool RemoteCaller::IsWorkerThread(HANDLE phThread)
 			//printf("Worker Founded! %llx\n", test);
 			//printf("ThreadID: %d\n\n", GetThreadId(phThread));
 			pManager[pId].workerThread = phThread;
-			return true;
+			res = true;
 		}
 	}
 	
-	return false;
+	if (res)
+		RegisterWaitForSingleObject(&pManager[pId].hWait, phThread, CleanerProc, (void*)pId, INFINITE, WT_EXECUTEONLYONCE);
+
+	return res;
 }
 
 RemoteStatu RemoteCaller::GetRemoteStatu()
@@ -299,10 +330,11 @@ RemoteStatu RemoteCaller::GetRemoteStatu()
 	else { return WXR_NoWorker; }
 }
 
+
 bool RemoteCaller::CreateWorkerThread()
 {
 	LARGE_INTEGER liDelay = { { 0 } };
-	liDelay.QuadPart = 0x8000000000000000; // 最大的负数 == 无限; 格式: -10 * 1000 * 30000; //30000ms
+	liDelay.QuadPart = 0x8000000000000000; //it is the smallest integer that a 64bit value can represent, so consider it as infinite; : -10 * 1000 * 30000; //30000ms
 
 	unsigned char buffer[200];
 	HANDLE hThread;
@@ -319,9 +351,7 @@ bool RemoteCaller::CreateWorkerThread()
 		Sleep(100);
 		if (NtCreateThreadEx(hThread, hProcess, (PTHREAD_START_ROUTINE)(stub32 + 8), NULL, HideFromDebug, THREAD_ALL_ACCESS)) {
 			pManager[pId].workerThread = hThread;
-			return true;
 		}
-		return false;
 	}
 	else {
 		DWORD64 stub64 = VirtualAllocEx64(hProcess, NULL, sizeof(scWorker64) + sizeof(LARGE_INTEGER), MEM_COMMIT, PAGE_READWRITE);
@@ -336,12 +366,12 @@ bool RemoteCaller::CreateWorkerThread()
 		Sleep(100);
 		if (NtCreateThreadEx64(hThread, hProcess, stub64 + 8, NULL, HideFromDebug, THREAD_ALL_ACCESS)) {
 			pManager[pId].workerThread = hThread;
-			return true;
 		}
-		return false;
 	}
-	return false;
 
+	RegisterWaitForSingleObject(&pManager[pId].hWait, hThread, CleanerProc, (void*)pId, INFINITE, WT_EXECUTEONLYONCE);
+
+	return true;
 }
 
 bool RemoteCaller::ExecLoadDll()
@@ -440,15 +470,17 @@ bool RemoteCaller::ExecInstall(DWORD threadId, HWND t)
 	
 }
 
+#pragma endregion
+
 #pragma region Proc
 
-//对于ConsoleWindowClass GetWindowThreadProcessId会返回错误的结果，故要特殊处理
-//原因：
+//Specially handle ConsoleWindowClass.
+//Reason：
 //https://www.howtogeek.com/howto/4996/what-is-conhost.exe-and-why-is-it-running/
 //https://www.oschina.net/translate/inside-the-windows-console
 bool HandleConsoleWindow(IN HANDLE hProcess, OUT DWORD* processId, OUT DWORD* threadId)
 {
-	//找到对应的conhost.exe的进程id
+	//Find conhost.exe process id.
 	if (isOSX64) {
 		DWORD64 consoleHostPId;
 		bool res = NtQueryInformationProcess64(hProcess, ProcessConsoleHostProcess, &consoleHostPId, 8, NULL);
@@ -464,9 +496,8 @@ bool HandleConsoleWindow(IN HANDLE hProcess, OUT DWORD* processId, OUT DWORD* th
 		*processId = consoleHostPId & ~3;
 	}
 
-	//这个对应线程id不好找，研究了半天没成功。。。索性在dll中进行变通，见dllmain代码Install函数
-	//问题：但是使用了 SetWindowLongPtr, 不安全, 原因： https://blogs.msdn.microsoft.com/oldnewthing/20031111-00/?p=41883
-	//待优化：最好还是能找到...
+	//if is unsafe to use SetWindowLongPtr for window subclassing, reason： https://blogs.msdn.microsoft.com/oldnewthing/20031111-00/?p=41883
+	//todo: find the threadId.
 	*threadId = NULL;
 	return true;
 }
@@ -484,13 +515,13 @@ VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 				}
 			}
 
-			//WXR_Ready: 已经安装
+			//WXR_Ready: Already installed.
 			if (GetProp(hWnd, L"WX_BASIC") != NULL) { return; }
 
 			char c[100];
 			GetClassNameA(hWnd, c, 100);
 
-			//需要排除的窗口类可在这里添加
+			//You can add exclusions here.
 			if (strcmp(c, "MsoSplash") == 0 ) { return; }
 
 			DWORD processId;
@@ -500,7 +531,7 @@ VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 
 			bool isCurpX64 = CheckProcessX64(hProcess);
 
-			//处理cmd窗口
+			//Handle ConsoleWindowClass.
 			if (strcmp(c, "ConsoleWindowClass") == 0) {
 				if (!HandleConsoleWindow(hProcess, &processId, &threadId)) { return; }
 
@@ -508,7 +539,7 @@ VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 				hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
 				if (hProcess == NULL) { return; }
 
-				//conhost.exe程序的位数与相关的cmd程序无关，只和OS有关
+				//The bits of conhost.exe is related to the OS.
 				isCurpX64 = isOSX64;
 			}
 			
@@ -530,13 +561,10 @@ VOID CALLBACK WinEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message) {
-	case WM_COPYDATA: {
-		COPYDATASTRUCT *pCopyData = (COPYDATASTRUCT*)lParam;
-		if (pCopyData->dwData == 0x1502) {
-			DWORD t;
-			memcpy(&t, pCopyData->lpData, 4);
-			RemoteCaller::pManagerErase(t);
-		}
+	case WM_TIMER: {
+		RemoteCaller caller;
+		caller.pManagerErase(wParam);
+		KillTimer(hWnd, wParam);
 		return 0;
 	}
 	case WM_CREATE: {
@@ -546,10 +574,11 @@ LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		stData.hWnd = hWnd;
 		stData.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 		stData.uCallbackMessage = WM_TRAY;
-		stData.hIcon = g_hIcon = LoadIcon(NULL, MAKEINTRESOURCE(IDI_APPLICATION));
+		stData.hIcon = LoadIcon(NULL, MAKEINTRESOURCE(IDI_APPLICATION));
 		wcscpy_s(stData.szTip, L"WindowX");
 		if (!Shell_NotifyIcon(NIM_ADD, &stData))
 			return -1;
+		SetTimer(hWnd, 151140225, 100000, NULL);
 		return 0;
 	}
 	case WM_TRAY: {
@@ -578,6 +607,7 @@ LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 	}
 	case WM_DESTROY: {
+		KillTimer(hWnd, 151140225);
 		NOTIFYICONDATA stData;
 		ZeroMemory(&stData, sizeof(stData));
 		stData.cbSize = sizeof(stData);
@@ -595,6 +625,8 @@ LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 #pragma endregion
+
+#pragma region ProgramInit
 
 std::unordered_set<DWORD> pIds;
 
@@ -657,6 +689,8 @@ void ScanRetriveWorkerThreads()
 	CloseHandle(hThreadSnapshot);
 }
 
+
+
 BOOL SetDebugPrivilege()
 {
 	BOOL bRet = FALSE;
@@ -674,6 +708,9 @@ BOOL SetDebugPrivilege()
 	return bRet;
 }
 
+#pragma endregion
+
+//Important: For security sake, do not run it with administrator privileges.
 //为了安全，不要以管理员权限运行!!!
 int WINAPI WinMain(HINSTANCE hInstance,
 	HINSTANCE hPrevInstance,
@@ -687,7 +724,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
 #endif // _DEBUG
 
 
-	//SetDebugPrivilege(); //为了安全，还是算了。。。
+	//SetDebugPrivilege(); //If you insist on running it with administrator privileges, uncomment this line.
 
 	GetModuleFileName(NULL, dllFullPath32, MAX_PATH - 8);
 	(wcsrchr(dllFullPath32, L'\\'))[0] = 0;
@@ -696,7 +733,6 @@ int WINAPI WinMain(HINSTANCE hInstance,
 	_wfopen_s(&fp, dllFullPath32, L"r");
 	if (fp == NULL) { return -1; }
 	fclose(fp);
-	//patchShellCode32();
 
 	IsWow64Process(GetCurrentProcess(), &isOSX64);
 	if (isOSX64) {
@@ -707,7 +743,6 @@ int WINAPI WinMain(HINSTANCE hInstance,
 		_wfopen_s(&fp, dllFullPath64, L"r");
 		if (fp == NULL) { return -1; }
 		fclose(fp);
-		//patchShellCode64();
 	}
 
 	WNDCLASS wx = { 0 };
@@ -717,8 +752,7 @@ int WINAPI WinMain(HINSTANCE hInstance,
 
 	if (!RegisterClass(&wx)) { return -2; }
 
-	HWND msgWnd;
-	if (!(msgWnd = CreateWindow(L"WindowX_1",  L"", 0, 0, 0, 0, 0, NULL, NULL, hInstance, NULL))) { return -3; }
+	if (!(g_msgWnd = CreateWindow(L"WindowX_1",  L"", 0, 0, 0, 0, 0, NULL, NULL, hInstance, NULL))) { return -3; }
 
 	RemoteCaller::ScInit();
 
