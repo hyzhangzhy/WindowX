@@ -578,7 +578,6 @@ LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		wcscpy_s(stData.szTip, L"WindowX");
 		if (!Shell_NotifyIcon(NIM_ADD, &stData))
 			return -1;
-		SetTimer(hWnd, 151140225, 100000, NULL);
 		return 0;
 	}
 	case WM_TRAY: {
@@ -607,7 +606,6 @@ LRESULT __stdcall WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 	}
 	case WM_DESTROY: {
-		KillTimer(hWnd, 151140225);
 		NOTIFYICONDATA stData;
 		ZeroMemory(&stData, sizeof(stData));
 		stData.cbSize = sizeof(stData);
