@@ -32,7 +32,7 @@ public:
 
 #pragma warning(push)
 #pragma warning(disable : 4409)
-
+//Attention: x64Call will zero stack space near variable, local buffers should be created for pointers.
 //注意：X64Call会清零传入参数附近的栈空间，故传入指针参数时注意要创建本地缓冲区
 //具体可以参考我是如何在 NtQueryInformationProcess64 中调用的
 DWORD64 __cdecl X64Call(DWORD64 func, int argC, ...)
@@ -342,6 +342,7 @@ DWORD64 getLdrGetProcedureAddress()
     WATCH(nameTable);
     getMem64(nameTable, modBase + ied.AddressOfNames, sizeof(DWORD)*ied.NumberOfNames);
 
+	//todo: Use binary search here.
     //待优化: 使用二分法来加速搜索
     for (DWORD i = 0; i < ied.NumberOfFunctions; i++)
     {
