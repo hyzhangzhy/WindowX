@@ -18,7 +18,7 @@ static UINT WX_HOOK;
 	fclose(stream);
 }*/
 
-void SendToWX(DWORD info)
+/*void SendToWX(DWORD info)
 {
 	HWND WindowX = FindWindow(L"WindowX_1", NULL);
 
@@ -29,7 +29,7 @@ void SendToWX(DWORD info)
 	CopyData.cbData = 4;
 	CopyData.lpData = &info;
 	SendMessage(WindowX, WM_COPYDATA, NULL, (LPARAM)&CopyData);
-}
+}*/
 
 #pragma region Features
 
@@ -360,7 +360,7 @@ LRESULT CALLBACK WXConsoleWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
 		SetWindowLongPtr(hWnd, GWLP_WNDPROC, OldWndProc);
 		RemoveProp(hWnd, L"WX_BASIC");
 		//OutputDebugString(L"send detach");
-		SendToWX(GetCurrentProcessId());
+		//SendToWX(GetCurrentProcessId());
 		return CallWindowProc((WNDPROC)OldWndProc, hWnd, message, wParam, lParam);
 	}
 
@@ -470,7 +470,6 @@ void WINAPI Install(DWORD tId, HWND t)
 }
 #pragma endregion
 
-
 BOOL APIENTRY DllMain(HMODULE hModule,
 	DWORD  ul_reason_for_call,
 	LPVOID lpReserved
@@ -483,7 +482,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		titleBarHeight = (GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CYCAPTION) +
 			GetSystemMetrics(SM_CXPADDEDBORDER));
 		WX_HOOK = RegisterWindowMessage(L"WX_HOOK__1");
-
 		//hMProcess = ModuleFromAddress(CallWndProc);*/
 		break;
 	}
@@ -493,11 +491,13 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	}
 
 	case DLL_THREAD_DETACH: {
+	
+		
 		break;
 	}
 
 	case DLL_PROCESS_DETACH: {
-		SendToWX(GetCurrentProcessId());
+		//SendToWX(GetCurrentProcessId());
 		break;
 	}
 	}
