@@ -308,8 +308,8 @@ bool RemoteCaller::IsWorkerThread(HANDLE phThread)
 	else {
 		DWORD startAdd = 0;
 		NtQueryInformationThread(phThread, ThreadQuerySetWin32StartAddress, &startAdd, 4, NULL);
-		DWORD test = 0;
-		ReadProcessMemory(hProcess, (void*)(startAdd - 8), &test, 4, NULL);
+		DWORD64 test = 0;
+		ReadProcessMemory(hProcess, (void*)(startAdd - 8), &test, 8, NULL);
 		if (test == 0x8000000000000000) {
 			//printf("Worker Founded! %llx\n", test);
 			//printf("ThreadID: %d\n\n", GetThreadId(phThread));
@@ -723,6 +723,8 @@ int WINAPI WinMain(HINSTANCE hInstance,
 
 
 	//SetDebugPrivilege(); //If you insist on running it with administrator privileges, uncomment this line.
+
+	if (FindWindow(L"WindowX_1", NULL) != NULL) { return 0; } //Already running, exit.
 
 	GetModuleFileName(NULL, dllFullPath32, MAX_PATH - 8);
 	(wcsrchr(dllFullPath32, L'\\'))[0] = 0;
